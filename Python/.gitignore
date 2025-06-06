@@ -1,0 +1,11 @@
+# Python virtual environments
+venv/
+# Python virtual environment files
+__pycache__/
+
+#files with credentials
+.env
+credentials.json
+
+#folder with unnecessary files
+qr_codes/
