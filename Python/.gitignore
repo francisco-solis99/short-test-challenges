@@ -2,6 +2,7 @@
 venv/
 # Python virtual environment files
 __pycache__/
+.pytest_cache/
 
 #files with credentials
 .env
@@ -9,3 +10,6 @@ credentials.json
 
 #folder with unnecessary files
 qr_codes/
+
+#database files
+*.db
