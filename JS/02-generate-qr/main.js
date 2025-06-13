@@ -48,56 +48,94 @@ function isValidUrl(url) {
   }
 }
 
-
-
-async function main() {
-  clack.intro(`Generate QR codes 🔨`);
-  clack.log.message(`This tool will help you generate a QR code image from a URL.`);
-
-  // Step 0 - Request num of qr to generate
-  const numOfQr = await clack.text({
-    message: 'How many QR codes do you want to generate?',
-    initialValue: '1',
-    validate: (value) => {
-      const num = parseInt(value, 10);
-      if (isNaN(num) || num < 1 || num > 10) {
-        return 'Please enter a number between 1 and 10.';
-      }
-    },
-    onCancel: () => {
-      clack.cancel('Operation cancelled by user ❌');
-      process.exit(0);
-    },
-  });
-
-  for (let index = 0; index < numOfQr; index++) {
-    // Step 1 - Request the url
-    clack.log.step(`Please enter a valid URL to generate the QR code ${index + 1}.`);
-    const url = await clack.text({
-      message: 'Enter a valid URL',
-      placeholder: 'https://google.com',
-      validate: (value) => {
-        if (!isValidUrl(value)) {
-          return 'Please enter a valid URL.';
+async function getUserPreferences() {
+  const preferences = await clack.group(
+    {
+      folderName: () => clack.text({
+        message: 'What will be the name of the folder to save the QR code images?',
+        placeholder: 'my-qr-codes...',
+        validate: (value) => {
+          const folderNameRegex = /^[a-zA-Z0-9_-]+$/;
+          const isValidName = folderNameRegex.test(value)
+          if (!isValidName) {
+            return 'Please enter a valid name';
+          }
         }
-      },
-      onCancel: () => {
-        clack.cancel('Operation cancelled by user.');
+      }),
+      numQrs: () => clack.text({
+        message: 'How many QR codes do you want to generate?',
+        initialValue: '1',
+        validate: (value) => {
+          const num = parseInt(value, 10);
+          if (isNaN(num) || num < 1 || num > 10) {
+            return 'Please enter a number between 1 and 10.';
+          }
+        },
+      }),
+      mode: () => clack.select({
+        message: 'Choose a way to enter the URL(s)',
+        options: [
+          { value: 'one-by-one', label: 'One by one', hint: 'Perfect with less number of urls' },
+          { value: 'all-in-one', label: 'All in one step' },
+        ],
+      })
+    },
+    {
+      // On Cancel callback that wraps the group
+      // So if the user cancels one of the prompts in the group this function will be called
+      onCancel: ({ results }) => {
+        clack.cancel('Operation cancelled.');
         process.exit(0);
       },
-    });
+    }
+  );
 
-    // Step 2 - Pass the url to generate a qr and handle possible errors
+  // console.log(group.name, group.age, group.color);
+  return preferences;
+}
+
+async function createQrCode({ dirPath, qrCodeContent, nameFile, isNeedFolder = false }) {
+  try {
+    if (isNeedFolder) {
+      await fs.mkdir(dirPath)
+    }
+    const filePath = path.join(dirPath, `${nameFile}.png`);
+    await fs.writeFile(filePath, qrCodeContent);
+  } catch (error) {
+    clack.log.error('Error creating the Qr code, check the name and try again')
+  }
+}
+
+async function createCodesOneByOne({ numQrs = 1, folderName }) {
+
+  for (let index = 0; index < numQrs; index += 1) {
+    clack.log.step(`Please enter a valid URL to generate the QR code ${index + 1}.`);
+
     try {
+      // Step 1 - Request the url
+      const url = await clack.text({
+        message: 'Enter a valid URL',
+        placeholder: 'https://google.com',
+        validate: (value) => {
+          if (!isValidUrl(value)) {
+            return 'Please enter a valid URL.';
+          }
+        },
+        onCancel: () => {
+          clack.cancel('Operation cancelled by user.');
+          process.exit(0);
+        },
+      });
+      // Step 2 - Pass the url to generate a qr and handle possible errors
       const spinnerGen = clack.spinner();
       spinnerGen.start(`Generating QR code for ${url}...`);
       await new Promise(resolve => setTimeout(resolve, 2000));
       const qrCode = await generateQrCode(url);
-      spinnerGen.stop(`QR code generated successfully!`);
+      spinnerGen.stop(`QR code generated successfully! ✅`);
 
       // Step 3 - generate QR code successfully
       const shouldContinue = await clack.confirm({
-        message: 'Do you want to save the QR code?',
+        message: 'Do you want to save the QR code as image?',
       });
 
       if (!shouldContinue) {
@@ -111,17 +149,103 @@ async function main() {
 
       // Add  a timeout to simulate a delay to save the file
       await new Promise(resolve => setTimeout(resolve, 2000));
-      const filePath = path.join(process.cwd(), `qr-code-${index + 1}.png`);
-      await fs.writeFile(filePath, qrCode);
-      spinnerSave.stop(`QR code saved to ${filePath}`);
-      clack.log.success(`QR code saved successfully!`);
-      clack.log.message(`You can find your QR code image at: ${filePath}`);
+      const folderPath = path.join(process.cwd(), folderName)
+      const nameFileUrl = new URL(url)
+      await createQrCode({
+        dirPath: folderPath,
+        qrCodeContent: qrCode,
+        isNeedFolder: index === 0,
+        nameFile: nameFileUrl.hostname
+      })
+      spinnerSave.stop(`QR code saved to ${folderPath}`);
+      clack.log.success(`QR code saved successfully! ✅`);
+      clack.log.message(`You can find your QR code image at: ${folderPath}`);
     } catch (error) {
       clack.cancel(`Error generating QR code: ${error.message}`);
       return;
     }
   }
+}
 
+async function createCodesInOneStep({ numQrs = 1, folderName }) {
+
+  clack.log.step(`Please enter a list of URLS separated by comma to generate their QR codes`);
+  try {
+    // Step 1 - Request the url
+    const urls = await clack.text({
+      message: 'Enter a list of URLs separated by comma',
+      placeholder: 'https://google.com, https://x.com',
+      validate: (value) => {
+        for (const url of value.split(',')) {
+          if (!isValidUrl(url)) {
+            return 'Please enter a valid URL list.';
+          }
+        }
+      },
+      onCancel: () => {
+        clack.cancel('Operation cancelled by user.');
+        process.exit(0);
+      },
+    });
+
+    const urlList = urls.split(',')
+
+    for (let index = 0; index < urlList.length; index += 1) {
+      const url = urlList[index]
+      // Step 2 - Pass the url to generate a qr and handle possible errors
+      const spinnerGen = clack.spinner();
+      spinnerGen.start(`Generating QR code for ${url}...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const qrCode = await generateQrCode(url);
+      spinnerGen.stop(`QR code for ${url} generated successfully! ✅`);
+
+      //  Step 3 - Save the QR code image to a file
+      const spinnerSave = clack.spinner();
+      spinnerSave.start(`Saving QR code...`);
+
+      // Add  a timeout to simulate a delay to save the file
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const folderPath = path.join(process.cwd(), folderName)
+      const nameFileUrl = new URL(url)
+      await createQrCode({
+        dirPath: folderPath,
+        qrCodeContent: qrCode,
+        isNeedFolder: index === 0,
+        nameFile: nameFileUrl.hostname
+      })
+      spinnerSave.stop(`QR code saved ✅`);
+    }
+    clack.log.success(`QR codes list created successfully in ${folderPath}! ✅`);
+  } catch (error) {
+    clack.cancel(`Error generating QR code: ${error.message}`);
+    return;
+  }
+}
+
+async function cliQrGen() {
+  // Select preferences
+  clack.log.step(`Select your preferences to generate QR codes of your Urls 👀`);
+  const preferences = await getUserPreferences()
+
+  // One by one process
+  if (preferences.mode === 'one-by-one') {
+    await createCodesOneByOne({
+      folderName: preferences.folderName,
+      numQrs: preferences.numQrs
+    })
+  } else {
+    // One step process
+    await createCodesInOneStep({
+      folderName: preferences.folderName,
+      numQrs: preferences.numQrs
+    })
+  }
+}
+
+async function main() {
+  clack.intro(`Generate QR codes 🔨`);
+  clack.log.message(`This tool will help you generate a QR code image from a URL.`);
+  await cliQrGen()
   clack.outro(`Bye 👋!`);
 }
 
