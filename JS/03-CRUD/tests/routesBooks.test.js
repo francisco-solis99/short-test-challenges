@@ -29,14 +29,6 @@ test('GET /books should return an array of books', async () => {
   assert.ok(Array.isArray(books));
 });
 
-test('GET /books/:id should return a single book', async () => {
-  const res = await makeRequest('/api/books/1');
-  assert.strictEqual(res.status, 200);
-  const { data: book } = JSON.parse(res.body);
-  assert.ok(book);
-  assert.strictEqual(book.id, 1);
-});
-
 test('POST /books should create a book', async () => {
   const newBook = JSON.stringify({ name: 'Native Node', author: 'Node', isbn: '9876543210' });
   const res = await makeRequest('/api/books', {
@@ -47,6 +39,14 @@ test('POST /books should create a book', async () => {
   assert.strictEqual(res.status, 201);
   const { data: book } = JSON.parse(res.body);
   assert.strictEqual(book.name, 'Native Node');
+});
+
+test('GET /books/:id should return a single book', async () => {
+  const res = await makeRequest('/api/books/1');
+  assert.strictEqual(res.status, 200);
+  const { data: book } = JSON.parse(res.body);
+  assert.ok(book);
+  assert.strictEqual(book.id, 1);
 });
 
 
