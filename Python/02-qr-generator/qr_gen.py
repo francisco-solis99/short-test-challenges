@@ -2,11 +2,13 @@ import os
 import qrcode
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
 
 #configuration
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
 ]
 CREDENTIALS_FILE = 'credentials.json'
 SPREADSHEET_ID = '13LqMKxO9_NHWupWPQa1g2qRtsE_l5pygLg-dJE5Jc_c'
@@ -19,6 +21,7 @@ os.makedirs(QR_FOLDER, exist_ok=True)
 #Auth
 creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=SCOPES)
 service = build('sheets', 'v4', credentials=creds)
+drive_service = build('drive', 'v3', credentials=creds)
 sheet = service.spreadsheets()
 
 def generate_qr(link, filename):
@@ -36,6 +39,38 @@ def generate_qr(link, filename):
     img.save(filename)
     return filename
 
+
+def upload_drive(file_path):
+    # upload a file to Google Drive and return the public URL
+    file_metadata = {
+        'name': os.path.basename(file_path),
+        'parents': ['root']
+    }
+    
+    media = MediaFileUpload(file_path, mimetype='image/png')
+    file = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+    
+    drive_service.permissions().create(
+        fileId=file['id'],
+        body={'type': 'anyone', 'role': 'reader'}
+    ).execute()
+    
+    return f"https://drive.google.com/uc?export=view&id={file['id']}"
+
+def insert_qr_sheet(fila, url_qr):
+    #insert the QR code image into the Google Sheet
+    formula = f'=IMAGE("{url_qr}")'
+    
+    service.spreadsheets().values().update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{HOJA}!B{fila}",  # Colummn B, the same row as the link
+        valueInputOption='USER_ENTERED',
+        body={'values': [[formula]]}
+    ).execute()
 
 def procesar_links():
     try:
@@ -61,10 +96,16 @@ def procesar_links():
             print(f"Procesando fila {i}: {link[:50]}...")
             
             try:
-                #Generate QR code
-                #name_link =
+                # 1. Generate QR code
                 qr_filename = f"{QR_FOLDER}/qr_{i}.png"
                 generate_qr(link, qr_filename)
+                
+                # 2. Upload to Google Drive
+                public_url = upload_drive(qr_filename)
+                
+                # 3. Insert QR code into Google Sheet
+                insert_qr_sheet(i, public_url)
+                print(f"  QR insertado en columna B{i}")
                 
             except Exception as e:
                 print(f"  Error procesando fila {i}: {str(e)}")
