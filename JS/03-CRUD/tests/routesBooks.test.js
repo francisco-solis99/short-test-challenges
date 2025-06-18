@@ -30,7 +30,7 @@ test('GET /books should return an array of books', async () => {
 });
 
 test('POST /books should create a book', async () => {
-  const newBook = JSON.stringify({ name: 'Native Node', author: 'Node', isbn: '9876543210' });
+  const newBook = JSON.stringify({ name: 'Native Node', author: 'Node', isbn: '9876543210123' });
   const res = await makeRequest('/api/books', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(newBook) },
@@ -64,31 +64,32 @@ test('PUT /books/:id should update a book', async () => {
   assert.strictEqual(book.name, 'Native Node Updated');
 });
 
-// test('DELETE /books/:id should delete a book', async () => {
-//   const res = await makeRequest('/api/books/1', {
-//     method: 'DELETE',
-//   });
-//   assert.strictEqual(res.status, 200);
-//   const { data: book } = JSON.parse(res.body);
-//   console.log(book)
-//   // assert.strictEqual(book.id, 1);
-// });
+test('DELETE /books/:id should delete a book', async () => {
+  const res = await makeRequest('/api/books/1', {
+    method: 'DELETE',
+  });
+  assert.strictEqual(res.status, 200);
+  const { data: book } = JSON.parse(res.body);
+  assert.strictEqual(book.id, '1');
+});
 
-// test('GET /books/:id after deletion should return 404', async () => {
-//   const res = await makeRequest('/api/books/1');
-//   assert.strictEqual(res.status, 404);
-//   const { error } = JSON.parse(res.body);
-//   assert.strictEqual(error, 'Book not found');
-// });
+test('GET /books/:id after deletion should return 404', async () => {
+  const res = await makeRequest('/api/books/1');
+  assert.strictEqual(res.status, 404);
+  const { error } = JSON.parse(res.body);
+  assert.strictEqual(error, 'Book not found');
+});
 
-// test('POST /books with missing fields should return 400', async () => {
-//   const newBook = JSON.stringify({ name: 'Incomplete Book' });
-//   const res = await makeRequest('/api/books', {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(newBook) },
-//     body: newBook,
-//   });
-//   assert.strictEqual(res.status, 400);
-//   const { error } = JSON.parse(res.body);
-//   assert.strictEqual(error, 'Missing required fields');
-// });
+test('POST /books with missing fields should return 400', async () => {
+  const newBook = JSON.stringify({ name: 'Incomplete Book' });
+  const res = await makeRequest('/api/books', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: newBook,
+  });
+  assert.strictEqual(res.status, 400);
+  const { error } = JSON.parse(res.body);
+  assert.strictEqual(error, 'Missing required fields');
+});
