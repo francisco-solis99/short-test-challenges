@@ -59,6 +59,26 @@ app.get('/api/books/:id', (req, res) => {
 
 app.post('/api/books', (req, res) => {
   const { name, author, isbn } = req.body;
+
+  // Validate required fields
+  if (!name || !author || !isbn) {
+    return res.status(400).json({ error: 'Missing required fields', data: null });
+  }
+  // Validate ISBN (should be a string of 13 digits)
+  if (!/^\d{13}$/.test(isbn)) {
+    return res.status(400).json({ error: 'ISBN must be a string of 13 digits', data: null });
+  }
+  // Check if the book already exists
+  db.get('SELECT * FROM books WHERE isbn = ?', [isbn], (err, existingBook) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to check for existing book', data: null });
+    }
+    if (existingBook) {
+      return res.status(400).json({ error: 'Book with this ISBN already exists', data: null });
+    }
+  });
+
+  // Insert the new book into the database
   try {
     db.run('INSERT INTO books (name, author, isbn) VALUES (?, ?, ?)', [name, author, isbn]);
     res.status(201).json({
@@ -68,8 +88,7 @@ app.post('/api/books', (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to create book', data: null });
   }
-}
-);
+});
 
 app.put('/api/books/:id', (req, res) => {
   const bookId = req.params.id;
